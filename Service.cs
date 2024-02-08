@@ -57,8 +57,9 @@ public class Service(string connectionString)
             }
             await _db.ExecuteAsync(CREATE_DEBIT_TRANSACTION_TRANS, parameters);
         }
-        catch (DbException e)
-        {
+        catch (DbException e):wq
+            j:wq
+                :::wq
             if (e.Message.Contains("422")) throw new UnprocessableContentException();
             throw;
         }
