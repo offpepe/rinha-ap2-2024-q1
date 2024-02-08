@@ -48,7 +48,7 @@ $$
 DECLARE
     balance numeric;
 BEGIN
-    SELECT (valor + value) INTO balance FROM saldos s WHERE cliente_id = cid ORDER BY s.id DESC LIMIT 1;
+    SELECT (valor + value) INTO balance FROM saldos s WHERE cliente_id = cid;
     INSERT INTO transacoes (cliente_id, valor, tipo, descricao) VALUES (cid, value, 'c', description);
     INSERT INTO saldos (cliente_id, valor) VALUES (cid, balance);
 END;
@@ -63,10 +63,9 @@ DECLARE
 BEGIN
     SELECT (valor - value) balance, c.limite
     FROM saldos s
-             INNER JOIN clientes c on c.id = s.cliente_id
+    INNER JOIN clientes c on c.id = s.cliente_id
     WHERE cliente_id = cid
     ORDER BY s.id DESC
-    LIMIT 1
     INTO data;
     IF data.balance * -1 > data.limite THEN
         RAISE EXCEPTION '422';

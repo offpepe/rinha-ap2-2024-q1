@@ -14,7 +14,7 @@ public static class ControllerSetup
         app.MapPost("/clientes/{id:int}/transacoes", async (int id, [FromServices] Service service, [FromBody] CreateTransactionDto dto) =>
         {
             var result = await service.ValidateTransactionAsync(id, dto.Valor, dto.Tipo);
-            service.CreateTransaction(id, dto).DoNotWait();
+            await service.CreateTransaction(id, dto);
             return Results.Ok(result);
         });
     }

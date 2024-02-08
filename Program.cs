@@ -21,11 +21,12 @@ app.UseMiddleware<ExceptionMiddleware>();
 app.SetControllers();
 app.Run();
 
+[JsonSerializable(typeof(SaldoDto))]
 [JsonSerializable(typeof(TransactionDto))]
 [JsonSerializable(typeof(TransactionDto[]))]
 [JsonSerializable(typeof(CreateTransactionDto))]
 [JsonSerializable(typeof(ExtractDto))]
 [JsonSerializable(typeof(ValidateTransactionDto))]
-public partial class AppJsonSerializerContext : JsonSerializerContext
+internal partial class AppJsonSerializerContext : JsonSerializerContext
 {
 }

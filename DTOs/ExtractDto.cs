@@ -7,10 +7,20 @@ public readonly struct ExtractDto
     {
     }
 
+    public SaldoDto Saldo { get; init; } 
+    public TransactionDto[] ultimas_transacoes { get; init; } = [];
+}
+
+public readonly struct SaldoDto
+{
+    public SaldoDto(int balance, int limit)
+    {
+        total = balance;
+        limite = limit;
+    }
     public int total { get; init; }
     public int limite { get; init; }
     public DateTime data_extrato { get; } = DateTime.Now;
-    public TransactionDto[] ultimas_transacoes { get; init; } = [];
 }
 
 public readonly struct TransactionDto

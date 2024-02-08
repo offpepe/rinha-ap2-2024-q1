@@ -15,7 +15,6 @@ public class ExceptionMiddleware : IMiddleware
         }
         catch (Exception e)
         {
-            Console.WriteLine(e.Message, e.StackTrace);
             context.Response.StatusCode = e switch
             {
                 NotFoundException notFound => (int) notFound.StatusCode,

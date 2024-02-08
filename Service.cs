@@ -18,11 +18,11 @@ public class Service(string connectionString)
         var parametes = new DynamicParameters();
         parametes.Add("id", id);
         var res = await _db.QueryUnmapped(QUERY_EXTRACT, parametes) ?? throw new NotFoundException();
-        var transactions = JsonSerializer.Deserialize<TransactionDto[]>((string) res[2].Value, AppJsonSerializerContext.Default.TransactionDtoArray);
+        var transactions = JsonSerializer.Deserialize<TransactionDto[]>((string) res[2].Value,
+            AppJsonSerializerContext.Default.TransactionDtoArray);
         return new ExtractDto()
         {
-            total = (int) res[0].Value,
-            limite = (int) res[1].Value,
+            Saldo = new SaldoDto((int) res[0].Value, (int) res[1].Value),
             ultimas_transacoes = transactions ?? []
         };
     }
@@ -47,22 +47,14 @@ public class Service(string connectionString)
         var parameters = new DynamicParameters();
         parameters.Add("id", id);
         parameters.Add("Valor", dto.Valor);
-        parameters.Add("Descricao",dto.Descricao);
-        try
+        parameters.Add("Descricao", dto.Descricao);
+        if (dto.Tipo == 'c')
         {
-            if (dto.Tipo == 'c')
-            {
-                await _db.ExecuteAsync(CREATE_CREDIT_TRANSACTION_TRANS, parameters);
-                return;
-            }
-            await _db.ExecuteAsync(CREATE_DEBIT_TRANSACTION_TRANS, parameters);
+            await _db.ExecuteAsync(CREATE_CREDIT_TRANSACTION_TRANS, parameters);
+            return;
         }
-        catch (DbException e):wq
-            j:wq
-                :::wq
-            if (e.Message.Contains("422")) throw new UnprocessableContentException();
-            throw;
-        }
+
+        await _db.ExecuteAsync(CREATE_DEBIT_TRANSACTION_TRANS, parameters);
     }
 
 
@@ -79,9 +71,7 @@ public class Service(string connectionString)
     LEFT JOIN transacoes t ON t.cliente_id = c.id
     INNER JOIN saldos s ON s.cliente_id = c.id
     WHERE c.id = @id
-    GROUP BY s.id, c.id
-    ORDER BY s.id DESC
-    LIMIT 1;
+    GROUP BY s.id, c.id;
 ";
 
     private const string QUERY_VERIFY_VALID_TRANSACTION = @"
@@ -90,9 +80,7 @@ public class Service(string connectionString)
         c.limite
     FROM clientes c
     INNER JOIN saldos s ON s.cliente_id = c.id
-    WHERE c.id = @id
-    ORDER BY s.id DESC
-    LIMIT 1;
+    WHERE c.id = @id;
 ";
 
     private const string CREATE_DEBIT_TRANSACTION_TRANS = @"
