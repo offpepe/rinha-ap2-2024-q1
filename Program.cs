@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
+using Npgsql;
 using Rinha2024.Dotnet;
 using Rinha2024.Dotnet.DTOs;
 using Rinha2024.Dotnet.Extensions;
@@ -12,12 +13,11 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.TypeInfoResolverChain.Insert(0, AppJsonSerializerContext.Default);
 });
+builder.Services.AddTransient<NpgsqlConnection>(_ => new NpgsqlConnection(builder.Configuration.GetConnectionString("DB")));
 builder.Services.AddSingleton<ExceptionMiddleware>();
-builder.Services.AddTransient<Service>(_ => new Service(builder.Configuration
-    .GetConnectionString("DB")!.Replace("@host", dbHost)));
+builder.Services.AddTransient<Service>();
 builder.Services.AddLogging(l => l.AddSimpleConsole());
 var app = builder.Build();
-app.UseMiddleware<ExceptionMiddleware>();
 app.SetControllers();
 app.Run();
 
