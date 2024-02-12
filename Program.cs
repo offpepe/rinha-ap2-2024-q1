@@ -8,7 +8,11 @@ using Rinha2024.Dotnet.Extensions;
 
 var dbHost = Environment.GetEnvironmentVariable("DB_HOSTNAME");
 var builder = WebApplication.CreateSlimBuilder(args);
-builder.WebHost.UseKestrel();
+builder.WebHost.UseKestrel(opt =>
+{
+    opt.Limits.MaxConcurrentConnections = 100;
+    opt.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(60);
+});
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.TypeInfoResolverChain.Insert(0, AppJsonSerializerContext.Default);
