@@ -15,12 +15,13 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       DB_HOSTNAME: db
       Kestrel__Endpoints__Http__Url: http://0.0.0.0:3000
+      TRANSACTIONS_PER_BATCH: 30
       ConnectionStrings__DB: Host=db:5432;Port=5432;Database=rinha;Username=admin;Password=123;Pooling=true;Minimum Pool Size=50;Maximum Pool Size=2000;Multiplexing=true;Timeout=15;Command Timeout=15;Cancellation Timeout=-1;No Reset On Close=true;Max Auto Prepare=20;Auto Prepare Min Usages=1;
     deploy:
       resources:
         limits:
           cpus: "0.2"
-          memory: "130MB"
+          memory: "100MB"
   api02:
     <<: *api
     hostname: api02
@@ -32,6 +33,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       DB_HOSTNAME: db
       Kestrel__Endpoints__Http__Url: http://0.0.0.0:3000
+      TRANSACTIONS_PER_BATCH: 30
 
   db:
     image: postgres:latest
@@ -49,7 +51,7 @@ services:
       resources:
         limits:
           cpus: "1"
-          memory: "250MB"
+          memory: "320MB"
   nginx:
     image: nginx:latest
     volumes:
@@ -63,7 +65,7 @@ services:
       resources:
         limits:
           cpus: "0.1"
-          memory: "40MB"
+          memory: "30MB"
 
 networks: 
   default:

@@ -90,7 +90,7 @@ public sealed class Service(NpgsqlConnection conn)
 
     private const string QUERY_VERIFY_VALID_TRANSACTION = @"
     SELECT
-        c.valor,
+        c.saldo,
         c.limite
     FROM clientes c
     WHERE c.id = @id;

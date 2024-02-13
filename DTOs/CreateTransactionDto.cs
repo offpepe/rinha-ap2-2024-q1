@@ -2,12 +2,10 @@
 
 namespace Rinha2024.Dotnet.DTOs;
 
-public readonly struct CreateTransactionDto
+public class CreateTransactionDto
 {
-    public CreateTransactionDto()
-    {
-    }
-
+    [JsonIgnore]
+    public int? Id { get; set; }
     public int Valor { get; init; }
     public char Tipo { get; init; }
     public string? Descricao { get; init; }

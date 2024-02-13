@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using System.Collections.Concurrent;
+using Microsoft.AspNetCore.Mvc;
 using Rinha2024.Dotnet.DTOs;
 using Rinha2024.Dotnet.Exceptions;
 
@@ -15,14 +16,19 @@ public static class ControllerSetup
                 var res = await service.GetExtract(id);
                 return res.HasValue ? Results.Ok(res.Value) : Results.NotFound();
             });
-        app.MapPost("/clientes/{id:int}/transacoes", async (int id, [FromServices] Service service, [FromBody] CreateTransactionDto dto) =>
+        app.MapPost("/clientes/{id:int}/transacoes", async (int id,
+            [FromServices] Service service,
+            [FromServices] ConcurrentQueue<CreateTransactionDto> queue,
+            [FromBody] CreateTransactionDto dto) =>
         {
             if (string.IsNullOrEmpty(dto.Descricao)) return Results.UnprocessableEntity();
-            var res = await service.CreateTransaction(id, dto);
-            if (res[0] == 1) return Results.NotFound();
-            return res[1] == 1
-                ? Results.UnprocessableEntity()
-                : Results.Ok(new ValidateTransactionDto(res[2], res[3]));
+            var tuple = await service.ValidateTransactionAsync(id, dto.Valor, dto.Tipo);
+            if (!tuple.HasValue) return Results.NotFound();
+            var (limit, balance) = tuple.Value;
+            if (limit < 0) return Results.UnprocessableEntity();
+            dto.Id = id;
+            queue.Enqueue(dto);
+            return Results.Ok(new ValidateTransactionDto(limit, balance));
         });
     }
 }

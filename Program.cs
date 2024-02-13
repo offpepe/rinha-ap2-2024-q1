@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Npgsql;
 using Rinha2024.Dotnet;
@@ -14,8 +16,9 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.TypeInfoResolverChain.Insert(0, AppJsonSerializerContext.Default);
 });
-builder.Services.AddScoped<NpgsqlConnection>(_ => new NpgsqlConnection(builder.Configuration.GetConnectionString("DB")));
-builder.Services.AddSingleton<ExceptionMiddleware>();
+builder.Services.AddTransient<NpgsqlConnection>(_ => new NpgsqlConnection(builder.Configuration.GetConnectionString("DB")!));
+builder.Services.AddSingleton<ConcurrentQueue<CreateTransactionDto>>();
+builder.Services.AddHostedService<TransactionHandler>();
 builder.Services.AddTransient<Service>();
 builder.Services.AddLogging(l => l.AddSimpleConsole());
 var app = builder.Build();
