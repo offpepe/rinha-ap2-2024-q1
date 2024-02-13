@@ -15,7 +15,8 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       DB_HOSTNAME: db
       Kestrel__Endpoints__Http__Url: http://0.0.0.0:3000
-      TRANSACTIONS_PER_BATCH: 30
+      TRANSACTIONS_PER_BATCH: 300
+      BATCH_SERVICE_IDLENESS: 20
       ConnectionStrings__DB: Host=db:5432;Port=5432;Database=rinha;Username=admin;Password=123;Pooling=true;Minimum Pool Size=50;Maximum Pool Size=2000;Multiplexing=true;Timeout=15;Command Timeout=15;Cancellation Timeout=-1;No Reset On Close=true;Max Auto Prepare=20;Auto Prepare Min Usages=1;
     deploy:
       resources:
@@ -33,8 +34,9 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       DB_HOSTNAME: db
       Kestrel__Endpoints__Http__Url: http://0.0.0.0:3000
-      TRANSACTIONS_PER_BATCH: 30
-
+      TRANSACTIONS_PER_BATCH: 300
+      BATCH_SERVICE_IDLENESS: 20
+      ConnectionStrings__DB: Host=db:5432;Port=5432;Database=rinha;Username=admin;Password=123;Pooling=true;Minimum Pool Size=50;Maximum Pool Size=2000;Multiplexing=true;Timeout=15;Command Timeout=15;Cancellation Timeout=-1;No Reset On Close=true;Max Auto Prepare=20;Auto Prepare Min Usages=1;
   db:
     image: postgres:latest
     hostname: db
