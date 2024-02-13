@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using Npgsql;
 using Rinha2024.Dotnet;
@@ -7,9 +6,10 @@ using Rinha2024.Dotnet.DTOs;
 using Rinha2024.Dotnet.Extensions;
 
 var builder = WebApplication.CreateSlimBuilder(args);
+var MAX_CONCURRENT_CONNECTIONS = builder.Configuration.GetValue<int>("MAX_CONCURRENT_CONNECTIONS");
 builder.WebHost.UseKestrel(opt =>
 {
-    opt.Limits.MaxConcurrentConnections = 100;
+    opt.Limits.MaxConcurrentConnections = MAX_CONCURRENT_CONNECTIONS;
     opt.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(60);
 });
 builder.Services.ConfigureHttpJsonOptions(options =>

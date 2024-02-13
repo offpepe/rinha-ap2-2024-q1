@@ -18,17 +18,14 @@ public static class ControllerSetup
             });
         app.MapPost("/clientes/{id:int}/transacoes", async (int id,
             [FromServices] Service service,
-            [FromServices] ConcurrentQueue<CreateTransactionDto> queue,
             [FromBody] CreateTransactionDto dto) =>
         {
             if (string.IsNullOrEmpty(dto.Descricao)) return Results.UnprocessableEntity();
-            var tuple = await service.ValidateTransactionAsync(id, dto.Valor, dto.Tipo);
+            dto.Id = id;
+            var tuple = await service.ValidateTransactionAsync(dto);
             if (!tuple.HasValue) return Results.NotFound();
             var (limit, balance) = tuple.Value;
-            if (limit < 0) return Results.UnprocessableEntity();
-            dto.Id = id;
-            queue.Enqueue(dto);
-            return Results.Ok(new ValidateTransactionDto(limit, balance));
+            return limit < 0 ? Results.UnprocessableEntity() : Results.Ok(new ValidateTransactionDto(limit, balance));
         });
     }
 }

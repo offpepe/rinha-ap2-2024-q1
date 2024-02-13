@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using Microsoft.AspNetCore.Components.Routing;
 using Npgsql;
 using Rinha2024.Dotnet.DTOs;
 
@@ -7,13 +8,29 @@ namespace Rinha2024.Dotnet;
 public class TransactionHandler(NpgsqlConnection conn, ConcurrentQueue<CreateTransactionDto> queue) : BackgroundService
 {
     private static readonly int TransactionsPerBatch = int.Parse(Environment.GetEnvironmentVariable("TRANSACTIONS_PER_BATCH") ?? "30");
-
+    private static readonly int IdleTime = int.Parse(Environment.GetEnvironmentVariable("BATCH_SERVICE_IDLENESS") ?? "200");
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            var itens = Dequeue(queue).ToArray();
-            if (itens.Length == 0)
+
+            if (queue.IsEmpty)
+            {
+                await Task.Delay(IdleTime,stoppingToken);
+                continue;
+            }
+
+            var itens = new HashSet<CreateTransactionDto>(TransactionsPerBatch);
+            for (var i = 0; i < TransactionsPerBatch; i++)
+            {
+                var hasItem = queue.TryDequeue(out var item);
+                if (!hasItem)
+                {
+                    break;
+                }
+                itens.Add(item!);
+            }
+            if (itens.Count == 0)
             {
                 continue;
             }
@@ -28,7 +45,7 @@ public class TransactionHandler(NpgsqlConnection conn, ConcurrentQueue<CreateTra
                     {
                         Parameters =
                         {
-                            new NpgsqlParameter<int>("id", transaction.Id!.Value),
+                            new NpgsqlParameter<int>("id", transaction.Id),
                             new NpgsqlParameter<int>("valor", transaction.Valor),
                             new NpgsqlParameter<string>("desc", transaction.Descricao!),
                             new NpgsqlParameter<char>("tipo", transaction.Tipo),
@@ -47,15 +64,5 @@ public class TransactionHandler(NpgsqlConnection conn, ConcurrentQueue<CreateTra
         }
     }
 
-    private static IEnumerable<CreateTransactionDto> Dequeue(ConcurrentQueue<CreateTransactionDto> queue)
-    {
-        var itemsReleased = 0;
-        while (TransactionsPerBatch > itemsReleased && queue.TryDequeue(out var response))
-        {
-            itemsReleased++;
-            yield return response;
-        }
-    }
-
-    private const string CREATE_TRANSACTION = @"SELECT CREATE_TRANSACTION(@id, @valor, @tipo, @desc);";
+    private const string CREATE_TRANSACTION = @"INSERT INTO transacoes (cliente_id, valor, tipo, descricao) VALUES (@id, @valor, @tipo, @desc);";
 }
