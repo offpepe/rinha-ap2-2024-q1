@@ -1,4 +1,5 @@
-﻿using System.Data;
+﻿using System.Collections.Concurrent;
+using System.Data;
 using System.Text.Json;
 using Npgsql;
 using Rinha2024.Dotnet.DTOs;
@@ -6,7 +7,7 @@ using Rinha2024.Dotnet.Exceptions;
 
 namespace Rinha2024.Dotnet;
 
-public sealed class Service(NpgsqlConnection conn)
+public sealed class Service(NpgsqlConnection conn, ConcurrentQueue<CreateTransactionDto> insertQueue)
 {
     public async Task<ExtractDto?> GetExtract(int id)
     {
@@ -38,39 +39,32 @@ public sealed class Service(NpgsqlConnection conn)
     }
 
 
-    public async Task<(int, int)?> ValidateTransactionAsync(int id, int value, char type)
+    public async Task<(int, int)?> ValidateTransactionAsync(CreateTransactionDto dto)
     {
         await conn.OpenAsync();
         await using var cmd = new NpgsqlCommand(QUERY_VERIFY_VALID_TRANSACTION, conn);
-        cmd.Parameters.Add(new NpgsqlParameter<int>("id", id));
+        cmd.Parameters.Add(new NpgsqlParameter<int>("id", dto.Id));
         await using var result = await cmd.ExecuteReaderAsync();
         if (!result.HasRows) return null;
         await result.ReadAsync();
         var balance = result.GetInt32(0);
         var limit = result.GetInt32(1);
         await conn.CloseAsync();
-        var newBalance = type == 'd' ? balance - value : balance + value;
-        if (type == 'd' && -newBalance > limit) return (-1, 0);
+        var isDebit = dto.Tipo == 'd';
+        var newBalance = isDebit ? balance - dto.Valor : balance + dto.Valor;
+        if (isDebit && -newBalance > limit) return (-1, 0);
+        await UpdateBalance(dto.Id, newBalance);
+        insertQueue.Enqueue(dto);
         return (limit, newBalance);
     }
 
-    public async Task<int[]> CreateTransaction(int id, CreateTransactionDto dto)
+    private async Task UpdateBalance(int id, int newBalance)
     {
         await conn.OpenAsync();
-        var cmd = new NpgsqlCommand(CREATE_TRANSACTION, conn)
-        {
-            Parameters =
-            {
-                new NpgsqlParameter<int>("id", id),
-                new NpgsqlParameter<int>("valor", dto.Valor),
-                new NpgsqlParameter<string>("desc", dto.Descricao!),
-                new NpgsqlParameter<char>("tipo", dto.Tipo),
-            }
-        };
-        await using var result = await cmd.ExecuteReaderAsync();
-        if (!await result.ReadAsync()) return [0,1,0,0];
-        var data = (result.GetValue(0) as int[]) ?? [1,0,0,0];
-        return data;
+        await using var cmd = new NpgsqlCommand(UPDATE_BALANCE, conn);
+        cmd.Parameters.Add(new NpgsqlParameter<int>("id", id));
+        cmd.Parameters.Add(new NpgsqlParameter<int>("newBalance", newBalance));
+        await cmd.ExecuteNonQueryAsync();
     }
     
     #region QUERIES
@@ -96,8 +90,8 @@ public sealed class Service(NpgsqlConnection conn)
     WHERE c.id = @id;
 ";
 
-    private const string CREATE_TRANSACTION = @"
-    SELECT CREATE_TRANSACTION(@id, @valor, @tipo, @desc);
+    private const string UPDATE_BALANCE = @"
+    UPDATE clientes SET saldo = @newBalance WHERE id = @id;
 ";
 
     #endregion
