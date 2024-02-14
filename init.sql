@@ -30,32 +30,28 @@ $$
     END;
 $$;
 
-CREATE OR REPLACE FUNCTION CREATE_TRANSACTION(cid integer, value integer, type char,description varchar(10)) RETURNS INT[]
+CREATE OR REPLACE FUNCTION UPDATE_BALANCE(cid integer, value integer, type char) RETURNS INT[2]
 AS
 $$
 DECLARE
-    client clientes%rowtype;
     balance int;
-    client_limit int;
+    newBalance int;
+    climit int;
 BEGIN
-    SELECT
-        *
-    FROM clientes c WHERE c.id = cid INTO client;
-    IF NOT found THEN
-        return ARRAY[1, 0, 0, 0];
+    SELECT c.saldo, c.limite INTO balance, climit FROM clientes c WHERE c.id = cid;
+    IF NOT FOUND THEN
+        RETURN ARRAY[0,0];
     END IF;
     IF type = 'c' THEN
-        balance := client.saldo::integer + value::integer;
+        newBalance = balance + value;
     ELSE
-        balance := (client.saldo - value)::INT;
-        IF -balance > client.limite THEN
-            return ARRAY[0, 1, 0, 0];
+        newBalance = balance - value;
+        IF -newBalance > climit THEN
+            RETURN ARRAY[0, -1];
         END IF;
     END IF;
-    client_limit = client.limite;
-    INSERT INTO transacoes (cliente_id, valor, tipo, descricao) VALUES (cid, value, type, description);
-    UPDATE clientes SET saldo = balance WHERE id = cid;
-    return ARRAY[0,0, balance, client_limit];
-END
+    UPDATE clientes SET saldo = newBalance WHERE id = cid;
+    RETURN ARRAY[newBalance, climit];
+END;
 $$
 LANGUAGE plpgsql;
