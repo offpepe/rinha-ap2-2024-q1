@@ -22,10 +22,9 @@ public static class ControllerSetup
         {
             if (string.IsNullOrEmpty(dto.Descricao)) return Results.UnprocessableEntity();
             dto.Id = id;
-            var tuple = await service.ValidateTransactionAsync(dto);
-            if (!tuple.HasValue) return Results.NotFound();
-            var (limit, balance) = tuple.Value;
-            return limit < 0 ? Results.UnprocessableEntity() : Results.Ok(new ValidateTransactionDto(limit, balance));
+            var values = await service.ValidateTransactionAsync(dto);
+            if (values == null) return Results.NotFound();
+            return values[1] < 0 ? Results.UnprocessableEntity() : Results.Ok(new ValidateTransactionDto(values[1], values[0]));
         });
     }
 }

@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Data;
+using System.Globalization;
 using System.Text.Json;
 using Npgsql;
 using Rinha2024.Dotnet.DTOs;
@@ -12,19 +13,32 @@ public sealed class Service(NpgsqlConnection conn, ConcurrentQueue<CreateTransac
     public async Task<ExtractDto?> GetExtract(int id)
     {
         await conn.OpenAsync();
-        var cmd = new NpgsqlCommand(QUERY_EXTRACT, conn)
+        await using var batch = new NpgsqlBatch(conn);
+        var parameter = new NpgsqlParameter<int>("id", id);
+        batch.BatchCommands.Add(new NpgsqlBatchCommand(QUERY_EXTRACT)
         {
-            Parameters =
+            Parameters = { parameter }
+        });
+        batch.BatchCommands.Add(new NpgsqlBatchCommand(QUERY_TRANSACTIONS)
+        {
+            Parameters = { parameter.Clone() }
+        });
+        await using var result = await batch.ExecuteReaderAsync();
+        if (!result.HasRows) return null;
+        await result.ReadAsync();
+        var total = result.GetInt32(0);
+        var limite = result.GetInt32(1);
+        if (!await result.NextResultAsync()) return new ExtractDto()
             {
-                new NpgsqlParameter<int>("id", id)
-            }
-        };
-        await using var queryResult = await cmd.ExecuteReaderAsync();
-        if (!queryResult.HasRows) return null;
-        await queryResult.ReadAsync();
-        var total = queryResult.GetInt32(0);
-        var limite = queryResult.GetInt32(1);
-        var jsonTrans = queryResult.GetString(2);
+                Saldo = new SaldoDto
+                {
+                    total = total,
+                    limite = limite,
+                    data_extrato = DateTime.Now
+                },
+                ultimas_transacoes = []
+            };
+        var transactions = await ReadTransactions(result);
         await conn.CloseAsync();
         return new ExtractDto()
         {
@@ -34,28 +48,44 @@ public sealed class Service(NpgsqlConnection conn, ConcurrentQueue<CreateTransac
                 limite = limite,
                 data_extrato = DateTime.Now
             },
-            ultimas_transacoes = JsonSerializer.Deserialize(jsonTrans, AppJsonSerializerContext.Default.TransactionDtoArray) ?? []
+            ultimas_transacoes = transactions 
         };
     }
 
+    private static async Task<TransactionDto[]> ReadTransactions(NpgsqlDataReader reader)
+    {
+        if (!reader.HasRows) return [];
+        var transactions = new List<TransactionDto>();
+        while (await reader.ReadAsync())
+        {
+            transactions.Add(new TransactionDto()
+            {
+                valor = reader.GetInt32(0),
+                tipo = reader.GetChar(1),
+                descricao = reader.GetString(2),
+                realizada_em = reader.GetString(3)
+            });
+        }
+        return transactions.ToArray();
+    }
 
-    public async Task<(int, int)?> ValidateTransactionAsync(CreateTransactionDto dto)
+
+    public async Task<int[]?> ValidateTransactionAsync(CreateTransactionDto dto)
     {
         await conn.OpenAsync();
-        await using var cmd = new NpgsqlCommand(QUERY_VERIFY_VALID_TRANSACTION, conn);
+        await using var cmd = new NpgsqlCommand(UPDATE_BALANCE, conn);
         cmd.Parameters.Add(new NpgsqlParameter<int>("id", dto.Id));
+        cmd.Parameters.Add(new NpgsqlParameter<int>("value", dto.Valor));
+        cmd.Parameters.Add(new NpgsqlParameter<char>("type", dto.Tipo));
         await using var result = await cmd.ExecuteReaderAsync();
         if (!result.HasRows) return null;
         await result.ReadAsync();
-        var balance = result.GetInt32(0);
-        var limit = result.GetInt32(1);
+        var values = result.GetValue(0) as int[] ?? [];
         await conn.CloseAsync();
-        var isDebit = dto.Tipo == 'd';
-        var newBalance = isDebit ? balance - dto.Valor : balance + dto.Valor;
-        if (isDebit && -newBalance > limit) return (-1, 0);
-        await UpdateBalance(dto.Id, newBalance);
+        if (values.Length == 0 || values[1] == 0) return null;
+        if (values[1] == -1) return values;
         insertQueue.Enqueue(dto);
-        return (limit, newBalance);
+        return values;
     }
 
     private async Task UpdateBalance(int id, int newBalance)
@@ -72,14 +102,19 @@ public sealed class Service(NpgsqlConnection conn, ConcurrentQueue<CreateTransac
     private const string QUERY_EXTRACT = @"
     SELECT
         c.saldo total,
-        c.limite,
-        CASE WHEN COUNT(t) > 0 THEN JSON_AGG(t.*)
-        ELSE '[]'::json
-        END ultimas_transacoes
+        c.limite
     FROM clientes c
-    LEFT JOIN transacoes t ON t.cliente_id = c.id
-    WHERE c.id = @id
-    GROUP BY c.id;
+    WHERE c.id = @id;";
+
+    private const string QUERY_TRANSACTIONS = @"
+    SELECT
+        valor,
+        tipo,
+        descricao,
+        realizada_em::text
+    FROM transacoes
+    WHERE cliente_id = @id
+    ORDER BY id DESC;
 ";
 
     private const string QUERY_VERIFY_VALID_TRANSACTION = @"
@@ -90,9 +125,7 @@ public sealed class Service(NpgsqlConnection conn, ConcurrentQueue<CreateTransac
     WHERE c.id = @id;
 ";
 
-    private const string UPDATE_BALANCE = @"
-    UPDATE clientes SET saldo = @newBalance WHERE id = @id;
-";
+    private const string UPDATE_BALANCE = @"SELECT UPDATE_BALANCE(@id, @value, @type);";
 
     #endregion
 }
