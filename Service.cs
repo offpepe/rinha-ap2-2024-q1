@@ -8,7 +8,7 @@ using Rinha2024.Dotnet.Exceptions;
 
 namespace Rinha2024.Dotnet;
 
-public sealed class Service(NpgsqlConnection conn, ConcurrentQueue<CreateTransactionDto> insertQueue)
+public sealed class Service(NpgsqlConnection conn)
 {
     public async Task<ExtractDto?> GetExtract(int id)
     {
@@ -77,14 +77,13 @@ public sealed class Service(NpgsqlConnection conn, ConcurrentQueue<CreateTransac
         cmd.Parameters.Add(new NpgsqlParameter<int>("id", dto.Id));
         cmd.Parameters.Add(new NpgsqlParameter<int>("value", dto.Valor));
         cmd.Parameters.Add(new NpgsqlParameter<char>("type", dto.Tipo));
+        cmd.Parameters.Add(new NpgsqlParameter<string>("desc", dto.Descricao));
         await using var result = await cmd.ExecuteReaderAsync();
         if (!result.HasRows) return null;
         await result.ReadAsync();
         var values = result.GetValue(0) as int[] ?? [];
         await conn.CloseAsync();
         if (values.Length == 0 || values[1] == 0) return null;
-        if (values[1] == -1) return values;
-        insertQueue.Enqueue(dto);
         return values;
     }
 
@@ -125,7 +124,7 @@ public sealed class Service(NpgsqlConnection conn, ConcurrentQueue<CreateTransac
     WHERE c.id = @id;
 ";
 
-    private const string UPDATE_BALANCE = @"SELECT UPDATE_BALANCE(@id, @value, @type);";
+    private const string UPDATE_BALANCE = @"SELECT UPDATE_BALANCE(@id, @value, @type, @desc);";
 
     #endregion
 }
