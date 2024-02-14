@@ -1,7 +1,4 @@
-﻿using System.Collections.Concurrent;
-using Microsoft.AspNetCore.Mvc;
-using Rinha2024.Dotnet.DTOs;
-using Rinha2024.Dotnet.Exceptions;
+﻿using Microsoft.AspNetCore.Mvc;
 
 namespace Rinha2024.Dotnet.Extensions;
 
@@ -21,8 +18,7 @@ public static class ControllerSetup
             [FromBody] CreateTransactionDto dto) =>
         {
             if (!ValidateTransaction(dto)) return Results.UnprocessableEntity();
-            dto.Id = id;
-            var values = await service.ValidateTransactionAsync(dto);
+            var values = await service.ValidateTransactionAsync(id, dto);
             if (values == null) return Results.NotFound();
             return values[1] < 0 ? Results.UnprocessableEntity() : Results.Ok(new ValidateTransactionDto(values[1], values[0]));
         });
