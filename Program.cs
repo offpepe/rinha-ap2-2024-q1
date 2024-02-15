@@ -20,7 +20,9 @@ builder.Services.AddSingleton<IMemoryCache>(_ => new MemoryCache(new MemoryCache
 {
     ExpirationScanFrequency = TimeSpan.FromMinutes(5),
 }));
+builder.Services.AddSingleton<ConcurrentQueue<int[]>>();
 builder.Services.AddTransient<NpgsqlConnection>(_ => new NpgsqlConnection(builder.Configuration.GetConnectionString("DB")!));
+builder.Services.AddHostedService<ConcurrenceHandler>();
 builder.Services.AddSingleton<ExceptionMiddleware>();
 builder.Services.AddTransient<Service>();
 builder.Services.AddLogging(l => l.AddSimpleConsole());

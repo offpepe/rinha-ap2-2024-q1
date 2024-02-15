@@ -1,9 +1,10 @@
-﻿using Microsoft.Extensions.Caching.Memory;
+﻿using System.Collections.Concurrent;
+using Microsoft.Extensions.Caching.Memory;
 using Npgsql;
 
 namespace Rinha2024.Dotnet;
 
-public sealed class Service(NpgsqlConnection conn, IMemoryCache cache)
+public sealed class Service(NpgsqlConnection conn, IMemoryCache cache, ConcurrentQueue<int[]> queue)
 {
     public async Task<ExtractDto?> GetExtract(int id)
     {
@@ -57,7 +58,7 @@ public sealed class Service(NpgsqlConnection conn, IMemoryCache cache)
         await cmd.ExecuteNonQueryAsync();
         await conn.CloseAsync();
         var newClientVal = new int[] {newBalance, client[1]};
-        cache.Set($"c:{id}", newClientVal);
+        queue.Enqueue([id, newClientVal[0], newClientVal[1]]);
         return newClientVal;
     }
 
