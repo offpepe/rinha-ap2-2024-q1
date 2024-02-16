@@ -65,7 +65,7 @@ public sealed class Service(NpgsqlConnection conn, IMemoryCache cache, Concurren
     public async Task VirtualizeClients()
     {
         var canConnect = false;
-        var escapeCounter = 30;
+        var escapeCounter = 300;
         while (!canConnect)
         {
             try
