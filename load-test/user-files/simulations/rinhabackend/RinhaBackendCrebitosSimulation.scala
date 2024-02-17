@@ -56,7 +56,7 @@ class RinhaBackendCrebitosSimulation
   val httpProtocol = http
     .baseUrl("http://localhost:9999")
     .userAgentHeader("Agente do Caos - 2024/Q1")
-    .shareConnections
+
   val debitos = scenario("débitos")
     .exec {s =>
       val descricao = randomDescricao()
@@ -135,7 +135,7 @@ class RinhaBackendCrebitosSimulation
         jmesPath("saldo.limite").ofType[String].is("#{limite}"),
         jmesPath("saldo.total").ofType[String].is("0")
       )
-    )
+    )   
     .exec(
       http("validações")
       .get("/clientes/6/extrato")

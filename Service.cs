@@ -1,10 +1,12 @@
 ﻿using System.Collections.Concurrent;
+using System.Collections.ObjectModel;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.VisualBasic;
 using Npgsql;
 
 namespace Rinha2024.Dotnet;
 
-public sealed class Service(NpgsqlConnection conn, IMemoryCache cache, ConcurrentQueue<int[]> queue)
+public sealed class Service(NpgsqlConnection conn, IMemoryCache cache)
 {
     public async Task<ExtractDto?> GetExtract(int id)
     {
@@ -21,10 +23,10 @@ public sealed class Service(NpgsqlConnection conn, IMemoryCache cache, Concurren
         return new ExtractDto(balanceDto, transactions);
     }
 
-    private static async Task<TransactionDto[]> ReadTransactions(NpgsqlDataReader reader)
+    private static async Task<IEnumerable<TransactionDto>> ReadTransactions(NpgsqlDataReader reader)
     {
         if (!reader.HasRows) return [];
-        var transactions = new List<TransactionDto>();
+        var transactions = new Collection<TransactionDto>();
         while (await reader.ReadAsync())
         {
             transactions.Add(new TransactionDto()
@@ -35,7 +37,7 @@ public sealed class Service(NpgsqlConnection conn, IMemoryCache cache, Concurren
                 realizada_em = reader.GetString(3)
             });
         }
-        return transactions.ToArray();
+        return transactions;
     }
 
 
@@ -58,7 +60,7 @@ public sealed class Service(NpgsqlConnection conn, IMemoryCache cache, Concurren
         await cmd.ExecuteNonQueryAsync();
         await conn.CloseAsync();
         var newClientVal = new int[] {newBalance, client[1]};
-        queue.Enqueue([id, newClientVal[0], newClientVal[1]]);
+        cache.Set($"c:{id}", newClientVal);
         return newClientVal;
     }
 

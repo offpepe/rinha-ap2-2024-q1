@@ -6,10 +6,10 @@ using Rinha2024.Dotnet;
 using Rinha2024.Dotnet.Extensions;
 
 var builder = WebApplication.CreateSlimBuilder(args);
-var MAX_CONCURRENT_CONNECTIONS = builder.Configuration.GetValue<int>("MAX_CONCURRENT_CONNECTIONS");
+var maxConcurrentConnections = builder.Configuration.GetValue<int>("MAX_CONCURRENT_CONNECTIONS");
 builder.WebHost.UseKestrel(opt =>
 {
-    opt.Limits.MaxConcurrentConnections = MAX_CONCURRENT_CONNECTIONS;
+    opt.Limits.MaxConcurrentConnections = maxConcurrentConnections;
     opt.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(60);
 });
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -20,9 +20,9 @@ builder.Services.AddSingleton<IMemoryCache>(_ => new MemoryCache(new MemoryCache
 {
     ExpirationScanFrequency = TimeSpan.FromMinutes(5),
 }));
-builder.Services.AddSingleton<ConcurrentQueue<int[]>>();
 builder.Services.AddTransient<NpgsqlConnection>(_ => new NpgsqlConnection(builder.Configuration.GetConnectionString("DB")!));
-builder.Services.AddHostedService<ConcurrenceHandler>();
+// builder.Services.AddSingleton<ConcurrentQueue<int[]>>();
+// builder.Services.AddHostedService<ConcurrenceHandler>();
 builder.Services.AddSingleton<ExceptionMiddleware>();
 builder.Services.AddTransient<Service>();
 builder.Services.AddLogging(l => l.AddSimpleConsole());
@@ -39,4 +39,5 @@ app.Run();
 [JsonSerializable(typeof(ValidateTransactionDto))]
 internal partial class AppJsonSerializerContext : JsonSerializerContext
 {
+    //empty
 }
