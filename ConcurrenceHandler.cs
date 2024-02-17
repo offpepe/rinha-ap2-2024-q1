@@ -7,7 +7,7 @@ public class ConcurrenceHandler(IMemoryCache cache, ConcurrentQueue<int[]> queue
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        while (true)
+        while (!stoppingToken.CanBeCanceled)
         {
             var hasItem = queue.TryDequeue(out var client);
             if (!hasItem)
