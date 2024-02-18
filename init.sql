@@ -35,7 +35,7 @@ $$
 DECLARE
     balance int4;
 BEGIN
-    SELECT saldo, limite INTO balance, climit FROM clientes WHERE id = cid;
+    SELECT saldo, limite INTO balance, climit FROM clientes WHERE id = cid FOR UPDATE;
     newBalance = balance - value;
     IF -newBalance > climit THEN
         climit = -1;
@@ -45,7 +45,7 @@ BEGIN
     INSERT INTO transacoes (cliente_id, valor, tipo, descricao) VALUES (cid, value, type, description);
 END;
 $$
-    LANGUAGE plpgsql;
+LANGUAGE plpgsql;
 
 
 CREATE OR REPLACE PROCEDURE CREATE_TRANSACTION_CREDIT(cid integer, value integer, type char, description text, INOUT newBalance integer, INOUT climit integer)
@@ -54,10 +54,9 @@ $$
 DECLARE
     balance int4;
 BEGIN
-    SELECT saldo, limite INTO balance, climit FROM clientes WHERE id = cid;
+    SELECT saldo, limite INTO balance, climit FROM clientes WHERE id = cid FOR UPDATE;
     newBalance = balance + value;
     UPDATE clientes SET saldo = newBalance WHERE id = cid;
     INSERT INTO transacoes (cliente_id, valor, tipo, descricao) VALUES (cid, value, type, description);
 END;
-$$
-    LANGUAGE plpgsql;
+$$LANGUAGE plpgsql;
