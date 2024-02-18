@@ -8,17 +8,19 @@ public static class ControllerSetup
     {
         app.MapGet("/ping", () => "pong");
         app.MapGet("/clientes/{id:int}/extrato",
-            async (int id, [FromServices] Service service) =>
+            async (int id, [FromServices] Database db) =>
             {
-                var res = await service.GetExtract(id);
-                return res.HasValue ? Results.Ok(res.Value) : Results.NotFound();
+                var balance = await db.GetBalance(id);
+                if (!balance.HasValue) return Results.NotFound();
+                var transactions = await db.GetTransactions(id);
+                return Results.Ok(new ExtractDto(balance.Value, transactions));
             });
         app.MapPost("/clientes/{id:int}/transacoes", async (int id,
-            [FromServices] Service service,
+            [FromServices] Database db,
             [FromBody] CreateTransactionDto dto) =>
         {
             if (!ValidateTransaction(dto)) return Results.UnprocessableEntity();
-            var values = await service.ValidateTransactionAsync(id, dto);
+            var values = await db.DoTransaction(id, dto);
             if (values == null) return Results.NotFound();
             return values[1] < 0 ? Results.UnprocessableEntity() : Results.Ok(new ValidateTransactionDto(values[1], values[0]));
         });
