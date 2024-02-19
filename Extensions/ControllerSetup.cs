@@ -10,10 +10,8 @@ public static class ControllerSetup
         app.MapGet("/clientes/{id:int}/extrato",
             async (int id, [FromServices] Database db) =>
             {
-                var balance = await db.GetBalance(id);
-                if (!balance.HasValue) return Results.NotFound();
-                var transactions = await db.GetTransactions(id);
-                return Results.Ok(new ExtractDto(balance.Value, transactions));
+                var balance = await db.GetExtract(id);
+                return !balance.HasValue ? Results.NotFound() : Results.Ok(balance.Value);
             });
         app.MapPost("/clientes/{id:int}/transacoes", async (int id,
             [FromServices] Database db,

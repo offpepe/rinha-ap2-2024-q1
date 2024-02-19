@@ -109,6 +109,56 @@ public class Database(NpgsqlDataSource dataSource) : IAsyncDisposable
 
         return transactions;
     }
+    
+    public async Task<ExtractDto?> GetExtract(int id)
+    {
+        await using var poolItem = await _transactionPool.RentAsync();
+        var cmd = poolItem.Value;
+        cmd.Parameters[0].Value = id;
+        await using var connection = await dataSource.OpenConnectionAsync();
+        cmd.Connection = connection;
+        await using var reader = await cmd.ExecuteReaderAsync();
+        if (!reader.HasRows) return null;
+        await reader.ReadAsync();
+        var balance = new SaldoDto(reader.GetInt32(4), reader.GetInt32(5));
+        var hasTransactions = await reader.IsDBNullAsync(0);
+        if (hasTransactions) return new ExtractDto(balance, []);
+        var transactions = new List<TransactionDto>()
+        {
+            new TransactionDto()
+            {
+                valor = reader.GetInt32(0),
+                tipo = reader.GetChar(1),
+                descricao = reader.GetString(2),
+                realizada_em = reader.GetString(3)
+            }
+        };
+        while (await reader.ReadAsync())
+        {
+            transactions.Add(new TransactionDto()
+            {
+                valor = reader.GetInt32(0),
+                tipo = reader.GetChar(1),
+                descricao = reader.GetString(2),
+                realizada_em = reader.GetString(3)
+            });
+        }
+
+        return new ExtractDto(balance, transactions);
+    }
+
+    public async Task Stretching()
+    {
+        for (var i = 0; i < 50; i++)
+        {
+            await GetExtract(1);
+            await DoTransaction(1, new CreateTransactionDto(1000, 'c', "blablabla"));
+            await DoTransaction(1, new CreateTransactionDto(1000, 'd', "blablabla"));
+        }
+        await using var cmd = new NpgsqlCommand(RESET_DB, await dataSource.OpenConnectionAsync());
+        await cmd.ExecuteNonQueryAsync();
+    }
+    
 
     private static IEnumerable<NpgsqlCommand> CreateCommands(NpgsqlCommand cmd, int qtd)
     {
@@ -119,6 +169,13 @@ public class Database(NpgsqlDataSource dataSource) : IAsyncDisposable
 
         yield return cmd;
     }
+
+    private const string RESET_DB = @"
+    BEGIN;
+    DELETE FROM transacoes WHERE id IS NOT NULL;
+    UPDATE clientes SET saldo = 0 WHERE id is not null;
+    COMMIT;
+";
     
     private const string QUERY_BALANCE = @"
     SELECT 
@@ -129,16 +186,24 @@ public class Database(NpgsqlDataSource dataSource) : IAsyncDisposable
 ";
 
     private const string QUERY_TRANSACTIONS = @"
+    WITH trans AS (
+        SELECT
+            valor,
+            tipo,
+            descricao,
+            realizada_em::text
+        FROM transacoes
+        WHERE cliente_id = $1
+        ORDER BY id DESC
+        LIMIT 10
+    )
     SELECT
-        valor,
-        tipo,
-        descricao,
-        realizada_em::text
-    FROM transacoes
-    WHERE cliente_id = $1
-    ORDER BY id DESC
-    LIMIT 10;
-";
+        t.*,
+        c.saldo,
+        c.limite
+    FROM clientes c
+    LEFT JOIN trans t ON true
+    WHERE id = $1;";
 
     public async ValueTask DisposeAsync()
     {
