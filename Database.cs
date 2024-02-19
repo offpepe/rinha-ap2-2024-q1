@@ -136,7 +136,8 @@ public class Database(NpgsqlDataSource dataSource) : IAsyncDisposable
         realizada_em::text
     FROM transacoes
     WHERE cliente_id = $1
-    ORDER BY id DESC;
+    ORDER BY id DESC
+    LIMIT 10;
 ";
 
     public async ValueTask DisposeAsync()
