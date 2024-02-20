@@ -8,19 +8,29 @@ public static class ControllerSetup
     {
         app.MapGet("/ping", () => "pong");
         app.MapGet("/clientes/{id:int}/extrato",
-            async (int id, [FromServices] Database db) =>
+            async (int id, [FromServices] VirtualDatabase vdb,[FromServices] Database db) =>
             {
-                var balance = await db.GetExtract(id);
-                return !balance.HasValue ? Results.NotFound() : Results.Ok(balance.Value);
+                if (id < 1 || id >= vdb.Size) return Results.NotFound();
+                var client = vdb.GetClient(ref id);
+                var transactions = await db.GetTransactions(id);
+                return Results.Ok(new ExtractDto(new SaldoDto(client[0], client[1]), transactions));
             });
+        app.MapPut("/balance/{id:int}", ([FromServices] VirtualDatabase vdb,int id, [FromBody] int value) =>
+        {
+            ref var client = ref vdb.GetClient(ref id);
+            client[id] = value;
+        });
         app.MapPost("/clientes/{id:int}/transacoes", async (int id,
+            [FromServices] VirtualDatabase vdb,
             [FromServices] Database db,
             [FromBody] CreateTransactionDto dto) =>
         {
+            if (id < 1 || id >= vdb.Size) return Results.NotFound();
             if (!ValidateTransaction(dto)) return Results.UnprocessableEntity();
-            var values = await db.DoTransaction(id, dto);
-            if (values == null) return Results.NotFound();
-            return values[1] < 0 ? Results.UnprocessableEntity() : Results.Ok(new ValidateTransactionDto(values[1], values[0]));
+            var result = await vdb.DoTransaction(id, dto.Tipo, dto.Valor);
+            if (result[1] == -1) return Results.UnprocessableEntity();
+            await db.InsertTransaction(id, dto);
+            return Results.Ok(new ValidateTransactionDto(result[1], result[0]));
         });
     }
 

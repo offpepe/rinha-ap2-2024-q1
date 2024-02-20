@@ -11,84 +11,32 @@ public class Database(NpgsqlDataSource dataSource) : IAsyncDisposable
     private static readonly int ReadPoolSize = int.TryParse(Environment.GetEnvironmentVariable("READ_POOL_SIZE"), out var value) ? value : 1500;
     private static readonly int WritePoolSize = int.TryParse(Environment.GetEnvironmentVariable("WRITE_POOL_SIZE"), out var value) ? value : 3000;
 
-    private readonly Pool _transactionPool =
+    private readonly Pool _readPool =
         new(
             CreateCommands(
-                new NpgsqlCommand(QUERY_TRANSACTIONS)
+                new NpgsqlCommand(QUERY_TRANSACTION)
                     {Parameters = {new NpgsqlParameter<int> {NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Integer}}},
                 ReadPoolSize),
             ReadPoolSize);
-    private readonly Pool _balancePool = 
+    
+    private readonly Pool _writePool =
         new(
             CreateCommands(
-                new NpgsqlCommand(QUERY_BALANCE)
-                    {Parameters = {new NpgsqlParameter<int> {NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Integer}}},
-                ReadPoolSize),
-            ReadPoolSize);
-    private readonly Pool _debitPool =
-        new(CreateCommands(new NpgsqlCommand("CREATE_TRANSACTION_DEBIT")
-        {
-            CommandType = CommandType.StoredProcedure,
-            Parameters =
-            {
-                new NpgsqlParameter<int> {NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Integer},
-                new NpgsqlParameter<int> {NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Integer},
-                new NpgsqlParameter<char> {NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Char},
-                new NpgsqlParameter<string> {NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Text},
-                new NpgsqlParameter<int> {NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Integer, Direction = ParameterDirection.Output},
-                new NpgsqlParameter<int> {NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Integer, Direction = ParameterDirection.Output},
-            }
-        }, WritePoolSize), WritePoolSize);
-    private readonly Pool _creditPool =
-        new(CreateCommands(new NpgsqlCommand("CREATE_TRANSACTION_CREDIT")
-        {
-            CommandType = CommandType.StoredProcedure,
-            Parameters =
-            {
-                new NpgsqlParameter<int> {NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Integer},
-                new NpgsqlParameter<int> {NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Integer},
-                new NpgsqlParameter<char> {NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Char},
-                new NpgsqlParameter<string> {NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Text},
-                new NpgsqlParameter<int> {NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Integer, Direction = ParameterDirection.Output},
-                new NpgsqlParameter<int> {NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Integer, Direction = ParameterDirection.Output},
-            }
-        }, WritePoolSize), WritePoolSize);
-
-    public async Task<int[]?> DoTransaction(int id, CreateTransactionDto dto)
-    {
-        await using var poolItem = dto.Tipo == 'd' ? await _debitPool.RentAsync() : await _creditPool.RentAsync();
-        var cmd = poolItem.Value;
-        cmd.Parameters[0].Value = id;
-        cmd.Parameters[1].Value = dto.Valor;
-        cmd.Parameters[2].Value = dto.Tipo;
-        cmd.Parameters[3].Value = dto.Descricao;
-        await using var connection = await dataSource.OpenConnectionAsync();
-        cmd.Connection = connection;
-        await cmd.ExecuteNonQueryAsync();
-        var balance = (int) (cmd.Parameters[4].Value ?? 0);
-        var limit = (int) (cmd.Parameters[5].Value ?? 0); 
-        if (limit == 0) return null;
-        return [balance, limit];
-    }
-
-
-    public async Task<SaldoDto?> GetBalance(int id)
-    {
-        await using var poolItem = await _balancePool.RentAsync();
-        var cmd = poolItem.Value;
-        cmd.Parameters[0].Value = id;
-        await using var connection = await dataSource.OpenConnectionAsync();
-        cmd.Connection = connection;
-        await using var reader = await cmd.ExecuteReaderAsync();
-        if (!await reader.ReadAsync()) return null;
-        var balance = reader.GetInt32(0);
-        var limit = reader.GetInt32(1);
-        return new SaldoDto(balance, limit);
-    }
-
+                new NpgsqlCommand("INSERT INTO transacoes (cliente_id, valor, tipo, descricao) VALUES ($1,$2,$3,$4);")
+                    {Parameters =
+                    {
+                        new NpgsqlParameter<int> {NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Integer},
+                        new NpgsqlParameter<int> {NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Integer},
+                        new NpgsqlParameter<char> {NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Char},
+                        new NpgsqlParameter<string> {NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Text},
+                    }},
+                WritePoolSize),
+            WritePoolSize);
+ 
+    
     public async Task<IEnumerable<TransactionDto>> GetTransactions(int id)
     {
-        await using var poolItem = await _transactionPool.RentAsync();
+        await using var poolItem = await _readPool.RentAsync();
         var cmd = poolItem.Value;
         cmd.Parameters[0].Value = id;
         await using var connection = await dataSource.OpenConnectionAsync();
@@ -110,56 +58,22 @@ public class Database(NpgsqlDataSource dataSource) : IAsyncDisposable
         return transactions;
     }
     
-    public async Task<ExtractDto?> GetExtract(int id)
+   
+
+    public async Task InsertTransaction(int id, CreateTransactionDto dto)
     {
-        await using var poolItem = await _transactionPool.RentAsync();
+        await using var poolItem = await _writePool.RentAsync();
         var cmd = poolItem.Value;
         cmd.Parameters[0].Value = id;
-        await using var connection = await dataSource.OpenConnectionAsync();
-        cmd.Connection = connection;
-        await using var reader = await cmd.ExecuteReaderAsync();
-        if (!reader.HasRows) return null;
-        await reader.ReadAsync();
-        var balance = new SaldoDto(reader.GetInt32(4), reader.GetInt32(5));
-        var hasTransactions = await reader.IsDBNullAsync(0);
-        if (hasTransactions) return new ExtractDto(balance, []);
-        var transactions = new List<TransactionDto>()
-        {
-            new TransactionDto()
-            {
-                valor = reader.GetInt32(0),
-                tipo = reader.GetChar(1),
-                descricao = reader.GetString(2),
-                realizada_em = reader.GetString(3)
-            }
-        };
-        while (await reader.ReadAsync())
-        {
-            transactions.Add(new TransactionDto()
-            {
-                valor = reader.GetInt32(0),
-                tipo = reader.GetChar(1),
-                descricao = reader.GetString(2),
-                realizada_em = reader.GetString(3)
-            });
-        }
-
-        return new ExtractDto(balance, transactions);
-    }
-
-    public async Task Stretching()
-    {
-        for (var i = 0; i < 50; i++)
-        {
-            await GetExtract(1);
-            await DoTransaction(1, new CreateTransactionDto(1000, 'c', "blablabla"));
-            await DoTransaction(1, new CreateTransactionDto(1000, 'd', "blablabla"));
-        }
-        await using var cmd = new NpgsqlCommand(RESET_DB, await dataSource.OpenConnectionAsync());
+        cmd.Parameters[1].Value = dto.Valor;
+        cmd.Parameters[2].Value = dto.Tipo;
+        cmd.Parameters[3].Value = dto.Descricao;
+        await using var conn = await dataSource.OpenConnectionAsync();
+        cmd.Connection = conn;
         await cmd.ExecuteNonQueryAsync();
     }
     
-
+   
     private static IEnumerable<NpgsqlCommand> CreateCommands(NpgsqlCommand cmd, int qtd)
     {
         for (var i = 0; i < qtd; i++)
@@ -185,7 +99,7 @@ public class Database(NpgsqlDataSource dataSource) : IAsyncDisposable
     WHERE c.id = $1;
 ";
 
-    private const string QUERY_TRANSACTIONS = @"
+    private const string QUERY_EXTRACT = @"
     WITH trans AS (
         SELECT
             valor,
@@ -205,12 +119,23 @@ public class Database(NpgsqlDataSource dataSource) : IAsyncDisposable
     LEFT JOIN trans t ON true
     WHERE id = $1;";
 
+    private const string QUERY_TRANSACTION = @"
+    SELECT
+        valor,
+        tipo,
+        descricao,
+        realizada_em::text
+    FROM transacoes
+    WHERE cliente_id = $1
+    ORDER BY id DESC
+    LIMIT 10;
+";
+
     public async ValueTask DisposeAsync()
     {
         if (_disposed) return;
         _disposed = true;
-        await _transactionPool.DisposeAsync();
-        await _creditPool.DisposeAsync();
+        await _readPool.DisposeAsync();
     }
 
     private sealed class Pool : IAsyncDisposable
