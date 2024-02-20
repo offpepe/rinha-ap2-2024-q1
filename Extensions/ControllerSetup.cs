@@ -15,11 +15,6 @@ public static class ControllerSetup
                 var transactions = await db.GetTransactions(id);
                 return Results.Ok(new ExtractDto(new SaldoDto(client[0], client[1]), transactions));
             });
-        app.MapPut("/balance/{id:int}", ([FromServices] VirtualDatabase vdb,int id, [FromBody] int value) =>
-        {
-            ref var client = ref vdb.GetClient(ref id);
-            client[id] = value;
-        });
         app.MapPost("/clientes/{id:int}/transacoes", async (int id,
             [FromServices] VirtualDatabase vdb,
             [FromServices] Database db,
