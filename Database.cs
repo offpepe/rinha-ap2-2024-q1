@@ -70,45 +70,6 @@ public class Database(NpgsqlDataSource dataSource) : IAsyncDisposable
         if (limit == 0) return null;
         return [balance, limit];
     }
-
-
-    public async Task<SaldoDto?> GetBalance(int id)
-    {
-        await using var poolItem = await _balancePool.RentAsync();
-        var cmd = poolItem.Value;
-        cmd.Parameters[0].Value = id;
-        await using var connection = await dataSource.OpenConnectionAsync();
-        cmd.Connection = connection;
-        await using var reader = await cmd.ExecuteReaderAsync();
-        if (!await reader.ReadAsync()) return null;
-        var balance = reader.GetInt32(0);
-        var limit = reader.GetInt32(1);
-        return new SaldoDto(balance, limit);
-    }
-
-    public async Task<IEnumerable<TransactionDto>> GetTransactions(int id)
-    {
-        await using var poolItem = await _transactionPool.RentAsync();
-        var cmd = poolItem.Value;
-        cmd.Parameters[0].Value = id;
-        await using var connection = await dataSource.OpenConnectionAsync();
-        cmd.Connection = connection;
-        await using var reader = await cmd.ExecuteReaderAsync();
-        if (!reader.HasRows) return [];
-        var transactions = new List<TransactionDto>();
-        while (await reader.ReadAsync())
-        {
-            transactions.Add(new TransactionDto()
-            {
-                valor = reader.GetInt32(0),
-                tipo = reader.GetChar(1),
-                descricao = reader.GetString(2),
-                realizada_em = reader.GetString(3)
-            });
-        }
-
-        return transactions;
-    }
     
     public async Task<ExtractDto?> GetExtract(int id)
     {
@@ -125,7 +86,7 @@ public class Database(NpgsqlDataSource dataSource) : IAsyncDisposable
         if (hasTransactions) return new ExtractDto(balance, []);
         var transactions = new List<TransactionDto>()
         {
-            new TransactionDto()
+            new ()
             {
                 valor = reader.GetInt32(0),
                 tipo = reader.GetChar(1),
