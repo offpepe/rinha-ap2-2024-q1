@@ -6,7 +6,7 @@ namespace Rinha2024.Dotnet;
 
 public class Database(NpgsqlDataSource dataSource) : IAsyncDisposable
 {
-    private bool _disposed = false;
+    private bool _disposed;
 
     private static readonly int ReadPoolSize = int.TryParse(Environment.GetEnvironmentVariable("READ_POOL_SIZE"), out var value) ? value : 1500;
     private static readonly int WritePoolSize = int.TryParse(Environment.GetEnvironmentVariable("WRITE_POOL_SIZE"), out var value) ? value : 3000;
@@ -140,10 +140,7 @@ public class Database(NpgsqlDataSource dataSource) : IAsyncDisposable
 
     private sealed class Pool : IAsyncDisposable
     {
-        private readonly int poolSize;
-        private int waitingRenters;
-
-        private readonly Channel<NpgsqlCommand> queue = Channel.CreateUnbounded<NpgsqlCommand>(
+        private readonly Channel<NpgsqlCommand> _queue = Channel.CreateUnbounded<NpgsqlCommand>(
             new UnboundedChannelOptions
             {
                 AllowSynchronousContinuations = true,
@@ -155,37 +152,31 @@ public class Database(NpgsqlDataSource dataSource) : IAsyncDisposable
         {
             for (var i = 0; i < poolSize; i++)
             {
-                if (!queue.Writer.TryWrite(items.ElementAt(i)))
-                    throw new ApplicationException("Failed to enqueue starting item on Pool.");
+                _ = _queue.Writer.TryWrite(items.ElementAt(i));
             }
         }
 
         public async ValueTask<PoolItem> RentAsync()
         {
             NpgsqlCommand? item = null;
-            Interlocked.Increment(ref waitingRenters);
             try
             {
-                item = await queue.Reader.ReadAsync();
+                item = await _queue.Reader.ReadAsync();
                 var poolItem = new PoolItem(item, ReturnPoolItemAsync);
                 return poolItem;
             }
             catch
             {
                 if (item != null)
-                    await queue.Writer.WriteAsync(item);
+                    await _queue.Writer.WriteAsync(item);
                 throw;
-            }
-            finally
-            {
-                Interlocked.Decrement(ref waitingRenters);
             }
         }
 
         private async ValueTask<List<NpgsqlCommand>> ReturnAllAsync()
         {
             var items = new List<NpgsqlCommand>();
-            await foreach (var item in queue.Reader.ReadAllAsync())
+            await foreach (var item in _queue.Reader.ReadAllAsync())
                 items.Add(item);
             return items;
         }
@@ -193,7 +184,7 @@ public class Database(NpgsqlDataSource dataSource) : IAsyncDisposable
         private async ValueTask ReturnPoolItemAsync(PoolItem poolItem)
         {
             poolItem.Value.Connection = null;
-            await queue.Writer.WriteAsync(poolItem.Value);
+            await _queue.Writer.WriteAsync(poolItem.Value);
         }
 
         public async ValueTask DisposeAsync()

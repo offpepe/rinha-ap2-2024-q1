@@ -17,7 +17,7 @@
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="8.0.0" />
     <PackageReference Include="Npgsql" Version="8.0.1" />
   </ItemGroup>
-  <PropertyGroup Condition="'$(ExtraOptimize)' == 'true'">
+  <PropertyGroup>
     <TrimmerRemoveSymbols>true</TrimmerRemoveSymbols>
     <DebuggerSupport>false</DebuggerSupport>
     <EnableUnsafeBinaryFormatterSerialization>false</EnableUnsafeBinaryFormatterSerialization>
@@ -28,6 +28,5 @@
     <MetadataUpdaterSupport>false</MetadataUpdaterSupport>
     <StackTraceSupport>false</StackTraceSupport>
     <UseSystemResourceKeys>true</UseSystemResourceKeys>
-    <DefineConstants>$(DefineConstants);EXTRAOPTIMIZE</DefineConstants>
   </PropertyGroup>
 </Project>
