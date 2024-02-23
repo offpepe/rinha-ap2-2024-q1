@@ -19,12 +19,12 @@ services:
       DB_HOSTNAME: db
       Kestrel__Endpoints__Http__Url: http://0.0.0.0:3000
       ConnectionStrings__DB: Host=db:5432;Port=5432;Database=rinha;Username=admin;Password=123;Pooling=true;Minimum Pool Size=50;Maximum Pool Size=2000;Multiplexing=true;Timeout=15;Command Timeout=15;Cancellation Timeout=-1;No Reset On Close=true;Max Auto Prepare=20;Auto Prepare Min Usages=1;
-      MAX_CONCURRENT_CONNECTIONS: 100
+      MAX_CONCURRENT_CONNECTIONS: 1000
       READ_POOL_SIZE: 1500
       WRITE_POOL_SIZE: 1000
       VIRTUAL_DB: vdb
-      CONNECTION_RANGE: 100
-      BASE_PORT: 6000
+      CONNECTION_RANGE: 1000
+      BASE_PORT: 10000
     deploy:
       resources:
         limits:
@@ -42,22 +42,22 @@ services:
       DB_HOSTNAME: db
       Kestrel__Endpoints__Http__Url: http://0.0.0.0:3000
       ConnectionStrings__DB: Host=db:5432;Port=5432;Database=rinha;Username=admin;Password=123;Pooling=true;Minimum Pool Size=50;Maximum Pool Size=2000;Multiplexing=true;Timeout=15;Command Timeout=15;Cancellation Timeout=-1;No Reset On Close=true;Max Auto Prepare=20;Auto Prepare Min Usages=1;
-      MAX_CONCURRENT_CONNECTIONS: 100
+      MAX_CONCURRENT_CONNECTIONS: 1000
       READ_POOL_SIZE: 1500
       WRITE_POOL_SIZE: 1000
       VIRTUAL_DB: vdb
-      CONNECTION_RANGE: 100
-      BASE_PORT: 6100
+      CONNECTION_RANGE: 1000
+      BASE_PORT: 11000
   vdb:
     image: alanlopes/vdb-rinha-2024q1-dotnet
     hostname: vdb
     environment:
-      CONNECTION_RANGE: 200
-      BASE_PORT: 6000
+      CONNECTION_RANGE: 1000
+      BASE_PORT: 10000
     deploy:
       resources:
         limits:
-          cpus: "0.2"
+          cpus: "2"
           memory: "280MB"
       
   db:
@@ -75,7 +75,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "1"
+          cpus: "0.7"
           memory: "150MB"
   nginx:
     image: nginx:latest
