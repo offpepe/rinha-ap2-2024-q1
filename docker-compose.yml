@@ -20,6 +20,8 @@ services:
       Kestrel__Endpoints__Http__Url: http://0.0.0.0:3000
       ConnectionStrings__DB: Host=db:5432;Port=5432;Database=rinha;Username=admin;Password=123;Pooling=true;Minimum Pool Size=50;Maximum Pool Size=2000;Multiplexing=true;Timeout=15;Command Timeout=15;Cancellation Timeout=-1;No Reset On Close=true;Max Auto Prepare=20;Auto Prepare Min Usages=1;
       MAX_CONCURRENT_CONNECTIONS: 100
+      READ_POOL_SIZE: 1500
+      WRITE_POOL_SIZE: 1000
       VIRTUAL_DB: vdb
       CONNECTION_RANGE: 100
       BASE_PORT: 6000
@@ -41,8 +43,8 @@ services:
       Kestrel__Endpoints__Http__Url: http://0.0.0.0:3000
       ConnectionStrings__DB: Host=db:5432;Port=5432;Database=rinha;Username=admin;Password=123;Pooling=true;Minimum Pool Size=50;Maximum Pool Size=2000;Multiplexing=true;Timeout=15;Command Timeout=15;Cancellation Timeout=-1;No Reset On Close=true;Max Auto Prepare=20;Auto Prepare Min Usages=1;
       MAX_CONCURRENT_CONNECTIONS: 100
-      UDP_SOCKET_RECEIVE_TIMEOUT: 0
-      UDP_SOCKET_SEND_TIMEOUT: 0
+      READ_POOL_SIZE: 1500
+      WRITE_POOL_SIZE: 1000
       VIRTUAL_DB: vdb
       CONNECTION_RANGE: 100
       BASE_PORT: 6100

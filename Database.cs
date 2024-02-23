@@ -9,7 +9,7 @@ public class Database(NpgsqlDataSource dataSource) : IAsyncDisposable
     private bool _disposed;
 
     private static readonly int ReadPoolSize = int.TryParse(Environment.GetEnvironmentVariable("READ_POOL_SIZE"), out var value) ? value : 1500;
-    private static readonly int WritePoolSize = int.TryParse(Environment.GetEnvironmentVariable("WRITE_POOL_SIZE"), out var value) ? value : 3000;
+    private static readonly int WritePoolSize = int.TryParse(Environment.GetEnvironmentVariable("WRITE_POOL_SIZE"), out var value) ? value : 1500;
 
     private readonly Pool _readPool =
         new(
