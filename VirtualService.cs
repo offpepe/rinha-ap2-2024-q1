@@ -1,85 +1,94 @@
-﻿using System.Net;
+﻿using System.Collections.Concurrent;
+using System.Net;
 using System.Net.Sockets;
 using System.Threading.Channels;
+using Rinha2024.Dotnet.IO;
+using Rinha2024.VirtualDb;
 
 namespace Rinha2024.Dotnet;
 
 public class VirtualService
 {
     private static readonly byte[] ZeroInBytes = [0, 0, 0, 0];
-
-    private static readonly int Range =
-        int.TryParse(Environment.GetEnvironmentVariable("CONNECTION_RANGE"), out var connectionRange)
-            ? connectionRange
-            : 2;
-
-    private static readonly int Port = int.TryParse(Environment.GetEnvironmentVariable("BASE_PORT"), out var basePort)
-        ? basePort
-        : 10000;
-
-    private readonly VirtualConnectionPool _pool;
-
+    private static readonly int Range = int.TryParse(Environment.GetEnvironmentVariable("CONNECTION_RANGE"), out var connectionRange) ? connectionRange : 1000;
+    private static readonly int Port = int.TryParse(Environment.GetEnvironmentVariable("BASE_PORT"), out var basePort) ? basePort : 7000;
+    
+    private readonly ConcurrentQueue<int> _ports = new();
+    private string _ipAddress;
+    
     public VirtualService()
     {
         var host = Environment.GetEnvironmentVariable("VIRTUAL_DB") ?? "localhost";
         var entries = Dns.GetHostAddresses(host);
-        _pool = new VirtualConnectionPool(entries[1].ToString(), Range, Port);
+        _ipAddress = entries[1].ToString();
+        for (var i = 0; i < Range; i++)
+        {
+            _ports.Enqueue(Port + i);
+        }
     }
-
+    
     public async Task<int[]> GetClient(int idx)
     {
-        var result = new int[2];
-        await using var poolItem = await _pool.RentAsync();
-        var tcpClient = poolItem.Conn;
-        Console.WriteLine("stablishing connection with process: {0}", tcpClient.GetHost());
+        var port = await TryGetPort();
         try
         {
-            var client = tcpClient.GetClient();
-            var stream = client.GetStream();
-            var sendBuffer = BitConverter.GetBytes(idx);
-            stream.Write(ZeroInBytes);
-            stream.Write(sendBuffer);
+            using var client = new TcpClient(_ipAddress, port);
+#if !ON_CLUSTER
+            Console.WriteLine("stablishing connection with process: {0}", client.Client.RemoteEndPoint);
+#endif
+            var buffer = await PacketBuilder.WriteMessage([0, idx]);
+            await client.Client.SendAsync(buffer);
             await Task.Delay(TimeSpan.FromTicks(50));
-            var responseBuffer = new byte[sizeof(int)];
-            _ = await stream.ReadAsync(responseBuffer);
-            result[0] = BitConverter.ToInt32(responseBuffer);
-            _ = await stream.ReadAsync(responseBuffer);
-            result[1] = BitConverter.ToInt32(responseBuffer);
+            await using var stream = client.GetStream();
+            return await stream.ReadMessageAsync();
         }
         catch (IOException _)
         {
-            tcpClient.Client.Close();
-            tcpClient.Reconnect();
+            await Task.Delay(TimeSpan.FromTicks(10));
             return await GetClient(idx);
         }
-
-        return result;
+        finally
+        {
+            _ports.Enqueue(port);
+        }
     }
     
     public async Task<int[]> DoTransaction(int idx, char type, int value)
     {
+        var port = await TryGetPort();
         try
         {
-            var result = new int[2];
-            await using var poolItem = await _pool.RentAsync();
-            var tcpClient = poolItem.Conn;
-            Console.WriteLine("stablishing connection with process: {0}", tcpClient.GetHost());
-            var stream = tcpClient.GetStream();
-            await stream.WriteAsync(BitConverter.GetBytes(idx));
-            await stream.WriteAsync(type == 'd' ? BitConverter.GetBytes(-value) : BitConverter.GetBytes(value));
+            using var client = new TcpClient(_ipAddress, port);
+#if !ON_CLUSTER
+            Console.WriteLine("stablishing connection with process: {0}", client.Client.RemoteEndPoint);
+#endif
+            if (type == 'd') value *= -1;
+            var buffer = await PacketBuilder.WriteMessage([idx, value]);
+            await client.Client.SendAsync(buffer);
             await Task.Delay(TimeSpan.FromTicks(50));
-            var responseBuffer = new byte[sizeof(int)];
-            _ = await stream.ReadAsync(responseBuffer);
-            result[0] = BitConverter.ToInt32(responseBuffer);
-            _ = await stream.ReadAsync(responseBuffer);
-            result[1] = BitConverter.ToInt32(responseBuffer);
-            return result;
+            await using var stream = client.GetStream();
+            return await stream.ReadMessageAsync();
         }
         catch (IOException _)
         {
-            Console.WriteLine("got IOException");
+            await Task.Delay(TimeSpan.FromTicks(10));
             return await DoTransaction(idx, type, value);
         }
+        finally
+        {
+            _ports.Enqueue(port);
+
+        }
     }
-    
+
+    private async Task<int> TryGetPort()
+    {
+        int port = 0;
+        while (!_ports.TryDequeue(out port))
+        {
+            await Task.Delay(TimeSpan.FromTicks(10));
+        }
+        return port;
+    }
+
 }
