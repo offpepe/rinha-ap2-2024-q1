@@ -12,8 +12,7 @@ public static class ControllerSetup
             {
                 if (id is < 1 or > 5) return Results.NotFound();
                 var client = await vdb.GetClient(id);
-                var transactions = await db.GetTransactions(id);
-                return Results.Ok(new ExtractDto(new SaldoDto(client[0], client[1]), transactions));
+                return Results.Ok(new ExtractDto(new SaldoDto(client[0], client[1]), []));
             });
         app.MapPost("/clientes/{id:int}/transacoes", async (int id,
             [FromServices] VirtualService vdb,
@@ -24,7 +23,7 @@ public static class ControllerSetup
             if (!ValidateTransaction(dto)) return Results.UnprocessableEntity();
             var result = await vdb.DoTransaction(id, dto.Tipo, dto.Valor);
             if (result[1] == -1) return Results.UnprocessableEntity();
-            await db.InsertTransaction(id, dto);
+            // await db.InsertTransaction(id, dto);
             return Results.Ok(new ValidateTransactionDto(result[1], result[0]));
         });
     }
