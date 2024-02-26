@@ -6,25 +6,13 @@ namespace Rinha2024.Dotnet;
 
 public class Database(NpgsqlDataSource dataSource) : IAsyncDisposable
 {
-    private bool _disposed = false;
-
     private static readonly int ReadPoolSize = int.TryParse(Environment.GetEnvironmentVariable("READ_POOL_SIZE"), out var value) ? value : 1500;
     private static readonly int WritePoolSize = int.TryParse(Environment.GetEnvironmentVariable("WRITE_POOL_SIZE"), out var value) ? value : 3000;
 
     private readonly Pool _transactionPool =
         new(
             CreateCommands(
-                new NpgsqlCommand(QUERY_TRANSACTIONS)
-                    {Parameters = {new NpgsqlParameter<int> {NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Integer}}},
-                ReadPoolSize),
-            ReadPoolSize);
-    private readonly Pool _balancePool = 
-        new(
-            CreateCommands(
-                new NpgsqlCommand(QUERY_BALANCE)
-                    {Parameters = {new NpgsqlParameter<int> {NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Integer}}},
-                ReadPoolSize),
-            ReadPoolSize);
+                new NpgsqlCommand(QUERY_TRANSACTIONS) {Parameters = {new NpgsqlParameter<int> {NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Integer}}}, ReadPoolSize), ReadPoolSize);
     private readonly Pool _debitPool =
         new(CreateCommands(new NpgsqlCommand("CREATE_TRANSACTION_DEBIT")
         {
@@ -110,12 +98,12 @@ public class Database(NpgsqlDataSource dataSource) : IAsyncDisposable
 
     public async Task Stretching()
     {
-        for (var i = 0; i < 50; i++)
+        await Parallel.ForAsync(0, 50, async (_,_) =>
         {
             await GetExtract(1);
             await DoTransaction(1, new CreateTransactionDto(1000, 'c', "blablabla"));
             await DoTransaction(1, new CreateTransactionDto(1000, 'd', "blablabla"));
-        }
+        });
         await using var cmd = new NpgsqlCommand(RESET_DB, await dataSource.OpenConnectionAsync());
         await cmd.ExecuteNonQueryAsync();
     }
@@ -168,16 +156,12 @@ public class Database(NpgsqlDataSource dataSource) : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        if (_disposed) return;
-        _disposed = true;
         await _transactionPool.DisposeAsync();
         await _creditPool.DisposeAsync();
     }
 
     private sealed class Pool : IAsyncDisposable
     {
-        private readonly int poolSize;
-        private int waitingRenters;
 
         private readonly Channel<NpgsqlCommand> queue = Channel.CreateUnbounded<NpgsqlCommand>(
             new UnboundedChannelOptions
@@ -199,7 +183,6 @@ public class Database(NpgsqlDataSource dataSource) : IAsyncDisposable
         public async ValueTask<PoolItem> RentAsync()
         {
             NpgsqlCommand? item = null;
-            Interlocked.Increment(ref waitingRenters);
             try
             {
                 item = await queue.Reader.ReadAsync();
@@ -211,10 +194,6 @@ public class Database(NpgsqlDataSource dataSource) : IAsyncDisposable
                 if (item != null)
                     await queue.Writer.WriteAsync(item);
                 throw;
-            }
-            finally
-            {
-                Interlocked.Decrement(ref waitingRenters);
             }
         }
 

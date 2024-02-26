@@ -6,7 +6,6 @@ public static class ControllerSetup
 {
     public static void SetControllers(this WebApplication app)
     {
-        app.MapGet("/ping", () => "pong");
         app.MapGet("/clientes/{id:int}/extrato",
             async (int id, [FromServices] Database db) =>
             {
@@ -28,7 +27,6 @@ public static class ControllerSetup
     {
         if (string.IsNullOrEmpty(dto.Descricao)) return false;
         if (dto.Descricao.Length > 10) return false;
-        if (dto.Tipo != 'd' && dto.Tipo != 'c') return false;
-        return true;
+        return dto.Tipo is 'd' or 'c';
     }
 }

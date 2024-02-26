@@ -1,8 +1,4 @@
 ﻿using System.Net;
-using System.Runtime.CompilerServices;
-using System.Text;
-using System.Text.Unicode;
-using Rinha2024.Dotnet.Exceptions;
 
 namespace Rinha2024.Dotnet;
 

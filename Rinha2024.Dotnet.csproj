@@ -17,6 +17,10 @@
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="8.0.0" />
     <PackageReference Include="Npgsql" Version="8.0.1" />
   </ItemGroup>
+  <ItemGroup>
+    <_ContentIncludedByDefault Remove="test\load-test\user-files\results\rinhabackendcrebitossimulation-20240214153220325\js\global_stats.json" />
+    <_ContentIncludedByDefault Remove="test\load-test\user-files\results\rinhabackendcrebitossimulation-20240214153220325\js\stats.json" />
+  </ItemGroup>
   <PropertyGroup Condition="'$(ExtraOptimize)' == 'true'">
     <TrimmerRemoveSymbols>true</TrimmerRemoveSymbols>
     <DebuggerSupport>false</DebuggerSupport>
