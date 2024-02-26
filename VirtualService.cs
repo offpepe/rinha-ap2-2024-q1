@@ -1,7 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading.Channels;
 using Rinha2024.Dotnet.IO;
 using Rinha2024.VirtualDb;
 
@@ -9,92 +8,97 @@ namespace Rinha2024.Dotnet;
 
 public class VirtualService
 {
-    private static readonly int Range = int.TryParse(Environment.GetEnvironmentVariable("CONNECTION_RANGE"), out var connectionRange) ? connectionRange : 3000;
-    private static readonly int Port = int.TryParse(Environment.GetEnvironmentVariable("BASE_PORT"), out var basePort) ? basePort : 7000;
+    private static readonly int MainPort = int.TryParse(Environment.GetEnvironmentVariable("BASE_PORT"), out var basePort) ? basePort : 30000;
+
+
+    private readonly ConcurrentQueue<int> _socketQueue = new();
+    private readonly ConcurrentQueue<TcpClient> _entryPoints = new();
+
     
-    private readonly ConcurrentQueue<Socket> _ports = new();
     private readonly string _ipAddress;
     
     public VirtualService()
     {
         var host = Environment.GetEnvironmentVariable("VIRTUAL_DB") ?? "localhost";
         var entries = Dns.GetHostAddresses(host);
-        _ipAddress = entries[1].ToString();
-        for (var i = 0; i < Range; i++)
+        _ipAddress = entries[0].ToString();
+        for (var i = 0; i < 5; i++)
         {
-            var port = Port + i;
-            _ports.Enqueue(new Socket(new TcpClient(_ipAddress, port), port));
+            _entryPoints.Enqueue(new TcpClient(_ipAddress,MainPort +  i));
         }
     }
-    
-    public async Task<int[]> GetClient(int idx)
+
+    private async Task<int> GetPort(byte type)
     {
-        var queueItem = await TryGetClient();
+        var found = false;
+        TcpClient? client = null;
+        var times = 0;
+        while (!found)
+        {
+            if(times == 100000) Environment.FailFast("Everyone is dead!!!");
+            found = _entryPoints.TryDequeue(out client);
+            await Task.Delay(TimeSpan.FromTicks(10));
+            times++;
+        }
+        var opt = new []{type};
+        var response = new byte[4];
         try
         {
-#if !ON_CLUSTER
-            Console.WriteLine("stablishing connection with process: {0}", queueItem.Tcp.Client.RemoteEndPoint);
-#endif
-            var buffer = await PacketBuilder.WriteMessage([0, idx]);
-            await queueItem.Tcp.Client.SendAsync(buffer);
-            await Task.Delay(TimeSpan.FromTicks(50));
-            var stream = queueItem.Tcp.GetStream();
-            return await stream.ReadMessageAsync();
+            await client!.Client.SendAsync(opt);
+            await client!.Client.ReceiveAsync(response);
         }
-        catch (Exception ex) when (ex is SocketException or IOException)
+        catch (SocketException _)
         {
-            await Task.Delay(TimeSpan.FromTicks(10));
-            _ports.Enqueue(queueItem);
-            return await GetClient(idx);
+            if (client == null) return await GetPort(type);
+            var port = ((IPEndPoint) client.Client.LocalEndPoint!).Port;
+            client?.Dispose();
+            _entryPoints.Enqueue(new TcpClient(_ipAddress, port));
+            return await GetPort(type);
         }
-        finally
-        {
-            _ports.Enqueue(queueItem);
-        }
+        _entryPoints.Enqueue(client);
+        return BitConverter.ToInt32(response);
+    } 
+    
+    public async Task<(int[], List<TransactionDto>)> GetClient(int idx)
+    {
+
+        var port = await GetPort(1);
+        using var tcp = new TcpClient(_ipAddress, port);
+        var buffer = await PacketBuilder.WriteMessage([0, idx]);
+        await tcp.Client.SendAsync(buffer);
+        await Task.Delay(TimeSpan.FromTicks(50));
+        await using var stream = tcp.GetStream();
+        return await stream.ReadMessageWithTransactionAsync();
     }
     
-    public async Task<int[]> DoTransaction(int idx, char type, int value)
+    public async Task<int[]> DoTransaction(int idx, char type, int value, string description)
     {
-        var socket = await TryGetClient();
-        try
-        {
-#if !ON_CLUSTER
-            Console.WriteLine("stablishing connection with process: {0}", socket.Tcp.Client.RemoteEndPoint);
-#endif
-            if (type == 'd') value *= -1;
-            var buffer = await PacketBuilder.WriteMessage([idx, value]);
-            await socket.Tcp.Client.SendAsync(buffer);
-            await Task.Delay(TimeSpan.FromTicks(50));
-            var stream = socket.Tcp.GetStream();
-            return await stream.ReadMessageAsync();
-        }
-        catch (Exception ex) when (ex is SocketException or IOException)
-        {
-            await Task.Delay(TimeSpan.FromTicks(10));
-            _ports.Enqueue(socket);
-            return await DoTransaction(idx, type, value);
-        }
-        finally
-        {
-            _ports.Enqueue(socket);
-
-        }
+        var port = await GetPort(2);
+        using var tcp = new TcpClient(_ipAddress, port);
+        if (type == 'd') value *= -1;
+        var buffer = await PacketBuilder.WriteMessage([idx, value], description);
+        await tcp.Client.SendAsync(buffer);
+        await Task.Delay(TimeSpan.FromTicks(50));
+        await using var stream = tcp.GetStream();
+        return await stream.ReadMessageAsync();
     }
 
-    private async Task<Socket> TryGetClient()
+    private async Task<int> TryGetClient()
     {
-        Socket item;
-        while (!_ports.TryDequeue(out item))
+        int port;
+        while (!_socketQueue.TryDequeue(out port))
         {
             await Task.Delay(TimeSpan.FromTicks(10));
         }
-        if (!item.Tcp.Connected)
-        {
-            await item.Tcp.ConnectAsync(_ipAddress, item.Port);
-        }
-        return item;
+        return port;
     }
 
-    private readonly record struct Socket(TcpClient Tcp, int Port);
+    private class SocketDto(int port)
+    {
+
+        public int Port { get; } = port;
+
+
+    };
 
 }

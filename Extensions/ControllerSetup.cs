@@ -8,23 +8,20 @@ public static class ControllerSetup
     {
         app.MapGet("/ping", () => "pong");
         app.MapGet("/clientes/{id:int}/extrato",
-            async (int id, [FromServices] VirtualService vdb,[FromServices] Database db) =>
+            async (int id, [FromServices] VirtualService vdb) =>
             {
                 if (id is < 1 or > 5) return Results.NotFound();
-                var client = await vdb.GetClient(id);
-                return Results.Ok(new ExtractDto(new SaldoDto(client[0], client[1]), []));
+                var (client, transactions) = await vdb.GetClient(id);
+                return Results.Ok(new ExtractDto(new SaldoDto(client[0], client[1]), transactions));
             });
         app.MapPost("/clientes/{id:int}/transacoes", async (int id,
             [FromServices] VirtualService vdb,
-            [FromServices] Database db,
             [FromBody] CreateTransactionDto dto) =>
         {
             if (id is < 1 or > 5) return Results.NotFound();
             if (!ValidateTransaction(dto)) return Results.UnprocessableEntity();
-            var result = await vdb.DoTransaction(id, dto.Tipo, dto.Valor);
-            if (result[1] == -1) return Results.UnprocessableEntity();
-            // await db.InsertTransaction(id, dto);
-            return Results.Ok(new ValidateTransactionDto(result[1], result[0]));
+            var result = await vdb.DoTransaction(id, dto.Tipo, dto.Valor, dto.Descricao);
+            return result[1] == -1 ? Results.UnprocessableEntity() : Results.Ok(new ValidateTransactionDto(result[1], result[0]));
         });
     }
 
