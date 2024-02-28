@@ -25,6 +25,7 @@ public static class PacketReader
         var transactions = new List<TransactionDto>();
         var receivedBuffer = new byte[1024];
         var position = 0;
+        
         var result = new int[2];
         _ = await stream.ReadAsync(receivedBuffer);
         for (var i = 0; i < 2; i++)
