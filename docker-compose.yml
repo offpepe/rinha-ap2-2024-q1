@@ -5,8 +5,7 @@ services:
     image: alanlopes/rinha-2024q1-dotnet
     hostname: api01
     depends_on:
-#      - db
-      - vdb
+      - capivara
     build:
       context: .
       dockerfile: Dockerfile
@@ -21,14 +20,15 @@ services:
       MAX_CONCURRENT_CONNECTIONS: 2000
       READ_POOL_SIZE: 1500
       WRITE_POOL_SIZE: 1000
-      VIRTUAL_DB: vdb
-      CONNECTION_RANGE: 2500
-      BASE_PORT: 50000
+      VIRTUAL_DB: capivara
+      W_BASE_PORT: 50000
+      R_BASE_PORT: 55000
+      LISTENERS: 150
     deploy:
       resources:
         limits:
-          cpus: "0.1"
-          memory: "50MB"
+          cpus: "0.45"
+          memory: "100MB"
   api02:
     <<: *api
     hostname: api02
@@ -43,20 +43,22 @@ services:
       MAX_CONCURRENT_CONNECTIONS: 2000
       READ_POOL_SIZE: 1500
       WRITE_POOL_SIZE: 1000
-      VIRTUAL_DB: vdb
-      CONNECTION_RANGE: 2500
-      BASE_PORT: 52500
-  vdb:
+      VIRTUAL_DB: capivara
+      R_BASE_PORT: 55150
+      W_BASE_PORT: 50150
+      LISTENERS: 150
+  capivara:
     image: alanlopes/vdb-rinha-2024q1-dotnet
-    hostname: vdb
+    hostname: capivara
     environment:
-      CONNECTION_RANGE: 5000
-      BASE_PORT: 50000      
+      W_BASE_PORT: 50000
+      R_BASE_PORT: 55000
+      LISTENERS: 300
     deploy:
       resources: 
         limits:
-          cpus: "1.2"
-          memory: "380MB"
+          cpus: "0.5"
+          memory: "150MB"
   nginx:
     image: nginx:latest
     volumes:
@@ -70,7 +72,7 @@ services:
       resources:
         limits:
           cpus: "0.1"
-          memory: "70MB"
+          memory: "200MB"
 
 networks: 
   default:
