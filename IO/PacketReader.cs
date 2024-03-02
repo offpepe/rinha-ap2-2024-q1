@@ -1,9 +1,7 @@
 ﻿using System.Net.Sockets;
 using System.Text;
-using System.Transactions;
-using Rinha2024.Dotnet;
 
-namespace Rinha2024.VirtualDb;
+namespace Rinha2024.Dotnet.IO;
 
 public static class PacketReader
 {
@@ -20,10 +18,9 @@ public static class PacketReader
     }
     
     
-    public static async Task<(int[], List<TransactionDto>)> ReadMessageWithTransactionAsync(this NetworkStream stream)
+    public static async Task<(int[], TransactionDto[])> ReadMessageWithTransactionAsync(this NetworkStream stream)
     {
-        var transactions = new List<TransactionDto>();
-        var receivedBuffer = new byte[1024];
+        var receivedBuffer = new byte[400];
         var position = 0;
         
         var result = new int[2];
@@ -35,27 +32,27 @@ public static class PacketReader
         }
         position += 4;
         var size = BitConverter.ToInt32(receivedBuffer, position);
+        if (size == 0) return (result, []);
+        var transactions = new TransactionDto[size];
         position += 4;
-        for (int i = 0; i < size; i++)
+        for (var i = 0; i < size; i++)
         {
             var value = BitConverter.ToInt32(receivedBuffer, position);
             position += 4;
             var type = BitConverter.ToChar(receivedBuffer, position);
             position += 2;
-            var builder = new StringBuilder();
-            for (var j = 0; j < 10; j++)
+            var descriptionSize = BitConverter.ToInt32(receivedBuffer, position);
+            position += 4;
+            var builder = new StringBuilder(descriptionSize);
+            for (var j = 0; j < descriptionSize; j++)
             {
                 builder.Append(BitConverter.ToChar(receivedBuffer, position));
                 position += 2;
             }
-            var description = builder.ToString();
-            builder.Clear();
-            for (var j = 0; j < 19; j++)
-            {
-                builder.Append(BitConverter.ToChar(receivedBuffer, position));
-                position += 2;
-            }
-            transactions.Add(new TransactionDto(value, type, description.Replace("_", ""), builder.ToString()));            
+            var description = builder.ToString().Replace("_", string.Empty);
+            var creationDate = DateTime.FromBinary(BitConverter.ToInt64(receivedBuffer, position));
+            position += 8;
+            transactions[i] = new TransactionDto(value, type, description, creationDate);
         }
         return (result, transactions);
     }

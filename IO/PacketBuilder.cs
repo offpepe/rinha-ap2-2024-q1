@@ -20,10 +20,7 @@ public static class PacketBuilder
         {
             await ms.WriteAsync(BitConverter.GetBytes(item));
         }
-        while(description.Length < 10)
-        {
-            description += '_';
-        }
+        await ms.WriteAsync(BitConverter.GetBytes(description.Length));
         foreach (var c in description)
         {
             await ms.WriteAsync(BitConverter.GetBytes(c));
