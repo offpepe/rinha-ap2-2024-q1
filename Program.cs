@@ -14,7 +14,6 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.TypeInfoResolverChain.Insert(0, AppJsonSerializerContext.Default);
 });
 builder.Services.AddSingleton<VirtualService>();
-builder.Services.AddSingleton<ExceptionMiddleware>();
 builder.Services.AddLogging(l => l.AddSimpleConsole());
 var app = builder.Build();
 app.SetControllers();   

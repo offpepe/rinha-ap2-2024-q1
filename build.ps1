@@ -1,1 +1,1 @@
-﻿docker build -t alanlopes/rinha-2024q1-dotnet .
+﻿docker build -t alanlopes/rinha-2024q1-dotnet-capivara .

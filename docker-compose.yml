@@ -2,7 +2,7 @@ version: "3.5"
 
 services:
   api01: &api
-    image: alanlopes/rinha-2024q1-dotnet
+    image: alanlopes/rinha-2024q1-dotnet-capivara
     hostname: api01
     depends_on:
       - capivara
